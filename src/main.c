@@ -8,18 +8,19 @@
 #define WINDOW_HEIGHT 800
 
 // TODO: Move all these #defines to better spots
-#define POINTS 20
+#define POINTS 50
 #define BUFFER_POINTS (POINTS * 2)
 #define STEP_AMOUNT (PI * 2 / POINTS)
 #define RADIUS 50
 #define RADIUS_SQR (RADIUS * RADIUS)
 
-#define GRAVITY_X 0.0
-#define GRAVITY_Y 0.5
 #define BORDER 20
-#define DAMPING 0.9
-#define FRICTION 0.95
-#define MAX_VEL 10
+#define MAX_VEL 8
+#define GRAVITY_X 0.0
+#define GRAVITY_Y 0.6
+#define DAMPING 0.4
+#define FRICTION 0.96
+#define TENSILE 0.7
 
 
 void softbody_set_points(
@@ -44,6 +45,14 @@ void softbody_align_target(
     Vector2 target_shape[BUFFER_POINTS],
     Vector2 average_pos,
     unsigned offset
+);
+void softbody_springs(
+    Vector2 shape[BUFFER_POINTS],
+    Vector2 shape_velocity[BUFFER_POINTS],
+    Vector2 target_shape[BUFFER_POINTS],
+    Vector2 target_shape_dist[POINTS],
+    unsigned offset,
+    unsigned old_offset
 );
 void centred_polygon(
     Vector2 target_shape[POINTS],
@@ -109,32 +118,25 @@ int main(void) {
             softbody_set_points(shape, target_shape, mx, my);
             softbody_set_velocity(shape_velocity, dx, dy);
         } else {
+            // Apply spring force to points
+            softbody_springs(
+                shape,
+                shape_velocity,
+                target_shape,
+                target_shape_dist,
+                offset,
+                old_offset
+            );
+
             // Move and calculate centre point
             average_pos = softbody_move(
                 shape, shape_velocity, border, offset, old_offset
             );
 
-            // Apply spring force to points
-            for (int i = 0; i < POINTS; i++) {
-                unsigned last_index = modulo(i-1, POINTS)+offset;
-                unsigned next_index = modulo(i+1, POINTS)+offset;
-
-                Vector2* lp = &shape[last_index];
-                Vector2* lpv = &shape_velocity[last_index];
-                Vector2* lt = &target_shape[last_index];
-
-                Vector2* p = &shape[i+offset];
-                Vector2* pv = &shape_velocity[i+offset];
-                Vector2* t = &target_shape[i];
-
-                Vector2* np = &shape[next_index];
-                Vector2* npv = &shape_velocity[next_index];
-                Vector2* nt = &target_shape[next_index];
-            }
-
             // Apply force to pull or retract points to target
             softbody_align_target(
-                shape, shape_velocity, target_shape, average_pos, offset);
+                shape, shape_velocity, target_shape, average_pos, offset
+            );
         }
 
         // RENDER
@@ -143,13 +145,13 @@ int main(void) {
 
         DrawRectangleLinesEx(border, 2, WHITE);
 
-        DrawCircleV(mouse_pos, 8, MAGENTA);
+        DrawCircleV(mouse_pos, 8, GREEN);
 
         for (int i = 0; i < POINTS; i++) {
-            DrawCircleV(shape[i+offset], 4, GREEN);
+            DrawCircleV(shape[i+offset], 4, MAGENTA);
         }
 
-        DrawCircleV(average_pos, 8, YELLOW);
+        DrawCircleV(average_pos, 4, YELLOW);
         EndDrawing();
     }
 }
@@ -248,6 +250,45 @@ void softbody_align_target(
     }
 }
 
+void softbody_springs(
+    Vector2 shape[BUFFER_POINTS],
+    Vector2 shape_velocity[BUFFER_POINTS],
+    Vector2 target_shape[BUFFER_POINTS],
+    Vector2 target_shape_dist[POINTS],
+    unsigned offset,
+    unsigned old_offset
+) {
+    for (int i = 0; i < POINTS; i++) {
+        unsigned last_index = modulo(i-1, POINTS);
+        unsigned next_index = modulo(i+1, POINTS);
+
+        Vector2* lp = &shape[last_index+old_offset];
+        Vector2* last_distance = &target_shape_dist[last_index];
+
+        Vector2* op = &shape[i+old_offset];
+        Vector2* next_distance = &target_shape_dist[i];
+
+        Vector2* np = &shape[next_index+old_offset];
+
+        float last_diff_x = op->x - lp->x;
+        float last_diff_y = op->y - lp->y;
+        float next_diff_x = np->x - op->x;
+        float next_diff_y = np->y - op->y;
+
+        Vector2* pv = &shape_velocity[i+offset];
+
+        float last_diff_vx = last_distance->x - last_diff_x;
+        float last_diff_vy = last_distance->y - last_diff_y;
+        float next_diff_vx = next_distance->x - next_diff_x;
+        float next_diff_vy = next_distance->y - next_diff_y;
+
+        pv->x += last_diff_vx * TENSILE;
+        pv->y += last_diff_vy * TENSILE;
+        pv->x += next_diff_vx * TENSILE;
+        pv->y += next_diff_vy * TENSILE;
+    }
+}
+
 void centred_polygon(
     Vector2 target_shape[POINTS],
     Vector2 target_shape_dist[POINTS]
@@ -263,7 +304,6 @@ void centred_polygon(
         float nx = cos(STEP_AMOUNT * next_index) * RADIUS;
         float ny = sin(STEP_AMOUNT * next_index) * RADIUS;
 
-        // Store distance to next point in second buffer
         target_shape_dist[i].x = nx - x;
         target_shape_dist[i].y = ny - y;
     }
