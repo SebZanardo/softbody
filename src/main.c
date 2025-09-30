@@ -1,63 +1,11 @@
-#include "raylib.h"
-#include "raymath.h"
-#include <math.h>
 #include <stdio.h>
+#include "arena.h"
+#include "constants.h"
+#include "raylib.h"
+#include "rlgl.h"
+#include "softbody.h"
 
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 800
-
-// TODO: Move all these #defines to better spots
-#define POINTS 50
-#define BUFFER_POINTS (POINTS * 2)
-#define STEP_AMOUNT (PI * 2 / POINTS)
-#define RADIUS 50
-#define RADIUS_SQR (RADIUS * RADIUS)
-
-#define BORDER 20
-#define MAX_VEL 8
-#define GRAVITY_X 0.0
-#define GRAVITY_Y 0.6
-#define DAMPING 0.4
-#define FRICTION 0.96
-#define TENSILE 0.7
-
-
-void softbody_set_points(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 target_shape[POINTS],
-    float cx,
-    float cy
-);
-void softbody_set_velocity(
-    Vector2 shape_velocity[BUFFER_POINTS], float vx, float vy
-);
-Vector2 softbody_move(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 shape_velocity[BUFFER_POINTS],
-    Rectangle border,
-    unsigned offset,
-    unsigned old_offset
-);
-void softbody_align_target(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 shape_velocity[BUFFER_POINTS],
-    Vector2 target_shape[BUFFER_POINTS],
-    Vector2 average_pos,
-    unsigned offset
-);
-void softbody_springs(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 shape_velocity[BUFFER_POINTS],
-    Vector2 target_shape[BUFFER_POINTS],
-    Vector2 target_shape_dist[POINTS],
-    unsigned offset,
-    unsigned old_offset
-);
-void centred_polygon(
-    Vector2 target_shape[POINTS],
-    Vector2 target_shape_dist[POINTS]
-);
 unsigned modulo(int value, unsigned m);
 
 
@@ -68,24 +16,17 @@ int main(void) {
 
     HideCursor();
 
-    SetRandomSeed(0);
+    SetRandomSeed(1);
 
-    Vector2 target_shape[POINTS] = {0};
-    Vector2 target_shape_dist[POINTS] = {0};
-    centred_polygon(target_shape, target_shape_dist);
+    // Temporary
+    Texture2D eye_16x16 = LoadTexture("src/data/images/eye(16x16).png");
+    Texture2D pupil_16x16 = LoadTexture("src/data/images/pupil(16x16).png");
 
-    Vector2 shape[BUFFER_POINTS] = {0};
-    Vector2 shape_velocity[BUFFER_POINTS] = {0};
+    Arena* main_arena = arena_init(ARENA_BYTES);
+    if (!main_arena) return 1;
 
-    float cx = (float)WINDOW_WIDTH / 2;
-    float cy = (float)WINDOW_HEIGHT / 2;
-    softbody_set_points(shape, target_shape, cx, cy);
-
-    // TODO: Store angular rotation and velocity somewhere
-    // In struct with target shape and dist
-
-    unsigned offset = POINTS;
-    unsigned old_offset = 0;
+    unsigned active_softbodies = 0;
+    Softbody* softbodies[MAX_SOFTBODIES];
 
     Rectangle border = {
         BORDER,
@@ -97,46 +38,55 @@ int main(void) {
     Vector2 mouse_pos = {0};
     Vector2 old_mouse_pos = {0};
 
-    Vector2 average_pos = {};
+    int second_buffer = 0;
+
+    int hovered = -1;
+    int holding = -1;
+
+    softbody_create_random(main_arena, softbodies, &active_softbodies);
 
     while (!WindowShouldClose()) {
         old_mouse_pos = mouse_pos;
         mouse_pos = GetMousePosition();
-        float mx = mouse_pos.x;
-        float my = mouse_pos.y;
 
-        // Flip offset
-        old_offset = offset;
-        offset = offset == 0 ? POINTS : 0;
+        second_buffer = second_buffer == 1 ? 0 : 1;
+
+        if (IsKeyPressed(KEY_SPACE)) {
+            softbody_create_random(main_arena, softbodies, &active_softbodies);
+        }
+
+        hovered = -1;
+        for (int i = 0; i < active_softbodies; i++) {
+            Softbody* softbody = softbodies[i]; 
+            if (CheckCollisionPointPoly(mouse_pos, softbody->shape, softbody->points)) {
+                hovered = i;
+                break;
+            }
+        }
 
         // Check if should drag points and reform
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            float dx = mouse_pos.x - old_mouse_pos.x;
-            float dy = mouse_pos.y - old_mouse_pos.y;
-            average_pos.x = mx;
-            average_pos.y = my;
-            softbody_set_points(shape, target_shape, mx, my);
-            softbody_set_velocity(shape_velocity, dx, dy);
+            Vector2 velocity = {
+                mouse_pos.x - old_mouse_pos.x,
+                mouse_pos.y - old_mouse_pos.y
+            };
+            if (holding < 0) {
+                holding = hovered;
+            }
+
+            if (holding >= 0) {
+                Softbody* softbody = softbodies[holding]; 
+                softbody_set_points(softbody, mouse_pos);
+                softbody_set_velocity(softbody, velocity);
+            }
         } else {
-            // Apply spring force to points
-            softbody_springs(
-                shape,
-                shape_velocity,
-                target_shape,
-                target_shape_dist,
-                offset,
-                old_offset
-            );
+            holding = -1;
+        }
 
-            // Move and calculate centre point
-            average_pos = softbody_move(
-                shape, shape_velocity, border, offset, old_offset
-            );
-
-            // Apply force to pull or retract points to target
-            softbody_align_target(
-                shape, shape_velocity, target_shape, average_pos, offset
-            );
+        for (int i = 0; i < active_softbodies; i++) {
+            Softbody* softbody = softbodies[i]; 
+            softbody_move(softbody, border, second_buffer);
+            softbody_align_target(softbody, second_buffer);
         }
 
         // RENDER
@@ -145,167 +95,33 @@ int main(void) {
 
         DrawRectangleLinesEx(border, 2, WHITE);
 
+        Vector2 render_points[MAX_POINTS] = {0};
+
+        // Draw in reverse order because pickup priority is oldest to newest
+        for (int i = active_softbodies - 1; i >= 0; i--) {
+            Softbody* softbody = softbodies[i]; 
+            unsigned offset = second_buffer*softbody->points;
+            for (int p = 0; p < softbody->points; p++) {
+                // Invert so points go counter-clockwise
+                render_points[softbody->points-p-1] = softbody->shape[p+offset];
+
+                /*DrawCircleV(softbody->shape[p+offset], 4, WHITE);*/
+            }
+            DrawTriangleFan(render_points, softbody->points, softbody->body_colour);
+            DrawTexture(eye_16x16, softbody->average_position.x - 8, softbody->average_position.y - 8, WHITE);
+            DrawTexture(pupil_16x16, softbody->average_position.x - 8, softbody->average_position.y - 8, softbody->eye_colour);
+
+            if (holding == i || (holding < 0 && hovered == i)) {
+                for (int i = 0; i < softbody->points; i++)
+                {
+                    DrawLineEx(softbody->shape[i+offset], softbody->shape[modulo(i + 1, softbody->points)+offset], 2.0f, WHITE);
+                }
+            }
+        }
+
         DrawCircleV(mouse_pos, 8, GREEN);
 
-        for (int i = 0; i < POINTS; i++) {
-            DrawCircleV(shape[i+offset], 4, MAGENTA);
-        }
-
-        DrawCircleV(average_pos, 4, YELLOW);
         EndDrawing();
-    }
-}
-
-void softbody_set_points(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 target_shape[POINTS],
-    float cx,
-    float cy
-) {
-    for (int i = 0; i < POINTS; i++) {
-        shape[i].x = cx + target_shape[i].x;
-        shape[i].y = cy + target_shape[i].y;
-        shape[i+POINTS].x = cx + target_shape[i].x;
-        shape[i+POINTS].y = cy + target_shape[i].y;
-    }
-}
-
-void softbody_set_velocity(
-    Vector2 shape_velocity[BUFFER_POINTS], float vx, float vy
-) {
-    for (int i = 0; i < POINTS; i++) {
-        shape_velocity[i].x = vx;
-        shape_velocity[i].y = vy;
-        shape_velocity[i+POINTS].x = vx;
-        shape_velocity[i+POINTS].y = vy;
-    }
-}
-
-Vector2 softbody_move(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 shape_velocity[BUFFER_POINTS],
-    Rectangle border,
-    unsigned offset,
-    unsigned old_offset
-) {
-    Vector2 average_pos = {0};
-
-    // Update points in current buffer
-    for (int i = 0; i < POINTS; i++) {
-        Vector2* p = &shape[i+offset];
-        Vector2* pv = &shape_velocity[i+offset];
-
-        Vector2* op = &shape[i+old_offset];
-        Vector2* opv = &shape_velocity[i+old_offset];
-
-        pv->x = (opv->x + GRAVITY_X) * FRICTION;
-        pv->y = (opv->y + GRAVITY_Y) * FRICTION;
-
-        Clamp(pv->x, -MAX_VEL, MAX_VEL);
-        Clamp(pv->y, -MAX_VEL, MAX_VEL);
-
-        p->x = op->x + pv->x;
-        p->y = op->y + pv->y;
-
-        // Clamp points to bounds
-        if (p->x < border.x) {
-            p->x = border.x;
-            pv->x = 0.0;
-        } else if (p->x > border.x + border.width) {
-            p->x = border.x + border.width;
-            pv->x = 0.0;
-        }
-        if (p->y < border.y) {
-            p->y = border.y;
-            pv->y = 0.0;
-        } else if (p->y > border.y + border.height) {
-            p->y = border.y + border.height;
-            pv->y = 0.0;
-        }
-        average_pos.x += p->x;
-        average_pos.y += p->y;
-    }
-
-    average_pos.x /= POINTS;
-    average_pos.y /= POINTS;
-
-    return average_pos;
-}
-
-void softbody_align_target(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 shape_velocity[BUFFER_POINTS],
-    Vector2 target_shape[BUFFER_POINTS],
-    Vector2 average_pos,
-    unsigned offset
-) {
-    for (int i = 0; i < POINTS; i++) {
-        Vector2* p = &shape[i+offset];
-        Vector2* pv = &shape_velocity[i+offset];
-        float tx = average_pos.x + target_shape[i].x;
-        float ty = average_pos.y + target_shape[i].y;
-
-        pv->x += (tx - p->x) * DAMPING;
-        pv->y += (ty - p->y) * DAMPING;
-    }
-}
-
-void softbody_springs(
-    Vector2 shape[BUFFER_POINTS],
-    Vector2 shape_velocity[BUFFER_POINTS],
-    Vector2 target_shape[BUFFER_POINTS],
-    Vector2 target_shape_dist[POINTS],
-    unsigned offset,
-    unsigned old_offset
-) {
-    for (int i = 0; i < POINTS; i++) {
-        unsigned last_index = modulo(i-1, POINTS);
-        unsigned next_index = modulo(i+1, POINTS);
-
-        Vector2* lp = &shape[last_index+old_offset];
-        Vector2* last_distance = &target_shape_dist[last_index];
-
-        Vector2* op = &shape[i+old_offset];
-        Vector2* next_distance = &target_shape_dist[i];
-
-        Vector2* np = &shape[next_index+old_offset];
-
-        float last_diff_x = op->x - lp->x;
-        float last_diff_y = op->y - lp->y;
-        float next_diff_x = np->x - op->x;
-        float next_diff_y = np->y - op->y;
-
-        Vector2* pv = &shape_velocity[i+offset];
-
-        float last_diff_vx = last_distance->x - last_diff_x;
-        float last_diff_vy = last_distance->y - last_diff_y;
-        float next_diff_vx = next_distance->x - next_diff_x;
-        float next_diff_vy = next_distance->y - next_diff_y;
-
-        pv->x += last_diff_vx * TENSILE;
-        pv->y += last_diff_vy * TENSILE;
-        pv->x += next_diff_vx * TENSILE;
-        pv->y += next_diff_vy * TENSILE;
-    }
-}
-
-void centred_polygon(
-    Vector2 target_shape[POINTS],
-    Vector2 target_shape_dist[POINTS]
-) {
-    for (int i = 0; i < POINTS; i++) {
-        float x = cos(STEP_AMOUNT * i) * RADIUS;
-        float y = sin(STEP_AMOUNT * i) * RADIUS;
-
-        target_shape[i].x = x;
-        target_shape[i].y = y;
-
-        unsigned next_index = modulo(i + 1, POINTS);
-        float nx = cos(STEP_AMOUNT * next_index) * RADIUS;
-        float ny = sin(STEP_AMOUNT * next_index) * RADIUS;
-
-        target_shape_dist[i].x = nx - x;
-        target_shape_dist[i].y = ny - y;
     }
 }
 

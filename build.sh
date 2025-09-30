@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Define the files to compile in one place here
-SOURCES="src/main.c"
+SOURCES="src/main.c src/arena.c src/softbody.c"
 
 LINUX="linux"
 MACOS="macos"
