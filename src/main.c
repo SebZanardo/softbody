@@ -1,4 +1,4 @@
-#include <stdio.h>
+/*#include <stdio.h>*/
 #include "arena.h"
 #include "constants.h"
 #include "raylib.h"
@@ -43,7 +43,7 @@ int main(void) {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "softbody");
     SetTargetFPS(60);
 
-    HideCursor();
+    /*HideCursor();*/
 
     SetRandomSeed(1);
 
@@ -87,18 +87,18 @@ int main(void) {
     while (!WindowShouldClose()) {
         if (IsWindowResized()) handle_resize();
 
-        Vector2 render_mouse_pos = GetMousePosition();
+        old_mouse_pos = mouse_pos;
+        mouse_pos = GetMousePosition();
 
         #ifdef WEB
             if (!handheld) {
-                render_mouse_pos.x *= window.screen_width / WINDOW_WIDTH;
-                render_mouse_pos.y *= window.screen_height / WINDOW_HEIGHT;
+                mouse_pos.x *= window.screen_width / WINDOW_WIDTH;
+                mouse_pos.y *= window.screen_height / WINDOW_HEIGHT;
             }
         #endif
 
-        old_mouse_pos = mouse_pos;
-        mouse_pos.x = (render_mouse_pos.x - window.offset_x) / window.scale;
-        mouse_pos.y = (render_mouse_pos.y - window.offset_y) / window.scale;
+        mouse_pos.x = (mouse_pos.x - window.offset_x) / window.scale;
+        mouse_pos.y = (mouse_pos.y - window.offset_y) / window.scale;
 
         second_buffer = second_buffer == 1 ? 0 : 1;
 
@@ -169,6 +169,7 @@ int main(void) {
                 }
             }
         }
+        DrawCircleV(mouse_pos, 16, MAGENTA);
 
         EndTextureMode();
 
@@ -192,7 +193,6 @@ int main(void) {
             0.0f,
             WHITE
         );
-        DrawCircleV(render_mouse_pos, 16, MAGENTA);
         EndDrawing();
     }
 }
