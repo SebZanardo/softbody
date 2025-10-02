@@ -46,6 +46,7 @@ int main(void) {
     /*HideCursor();*/
 
     SetRandomSeed(1);
+    srand(1);
 
     #ifdef WEB
         handheld = IsMobile();
@@ -58,14 +59,25 @@ int main(void) {
     RenderTexture2D target = LoadRenderTexture(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     // Temporary
-    Texture2D eye_16x16 = LoadTexture("src/data/images/eye(16x16).png");
-    Texture2D pupil_16x16 = LoadTexture("src/data/images/pupil(16x16).png");
+    Texture2D dungeon = LoadTexture("src/data/images/DUNGEON.png");
+    Texture2D scelra_textures[EYETYPE_COUNT] = {
+        LoadTexture("src/data/images/1616SCELRA.png"),
+        LoadTexture("src/data/images/3232SCELRA.png")
+    };
+    Texture2D iris_textures[EYETYPE_COUNT] = {
+        LoadTexture("src/data/images/1616IRIS.png"),
+        LoadTexture("src/data/images/3232IRIS.png")
+    };
+
+    /*Texture2D eye_16x16 = LoadTexture("src/data/images/eye(16x16).png");*/
+    /*Texture2D pupil_16x16 = LoadTexture("src/data/images/pupil(16x16).png");*/
 
     Arena* main_arena = arena_init(ARENA_BYTES);
     if (!main_arena) return 1;
 
     unsigned active_softbodies = 0;
     Softbody* softbodies[MAX_SOFTBODIES];
+    SlimeVisual* slime_visual[MAX_SOFTBODIES];
 
     Rectangle border = {
         BORDER,
@@ -82,7 +94,7 @@ int main(void) {
     int hovered = -1;
     int holding = -1;
 
-    softbody_create_random(main_arena, softbodies, &active_softbodies);
+    softbody_create_random(main_arena, softbodies, slime_visual, &active_softbodies);
 
     while (!WindowShouldClose()) {
         if (IsWindowResized()) handle_resize();
@@ -103,7 +115,7 @@ int main(void) {
         second_buffer = second_buffer == 1 ? 0 : 1;
 
         if (IsKeyPressed(KEY_SPACE)) {
-            softbody_create_random(main_arena, softbodies, &active_softbodies);
+            softbody_create_random(main_arena, softbodies, slime_visual, &active_softbodies);
         }
 
         hovered = -1;
@@ -144,6 +156,8 @@ int main(void) {
         BeginTextureMode(target);
         ClearBackground(BLACK);
 
+        DrawTexture(dungeon, 0, 0, WHITE);
+
         DrawRectangleLinesEx(border, 2, WHITE);
 
         Vector2 render_points[MAX_POINTS] = {0};
@@ -151,16 +165,35 @@ int main(void) {
         // Draw in reverse order because pickup priority is oldest to newest
         for (int i = active_softbodies - 1; i >= 0; i--) {
             Softbody* softbody = softbodies[i]; 
+            SlimeVisual* visuals = slime_visual[i]; 
+
             unsigned offset = second_buffer*softbody->points;
             for (int p = 0; p < softbody->points; p++) {
                 // Invert so points go counter-clockwise
                 render_points[softbody->points-p-1] = softbody->shape[p+offset];
-
                 /*DrawCircleV(softbody->shape[p+offset], 4, WHITE);*/
             }
-            DrawTriangleFan(render_points, softbody->points, softbody->body_colour);
-            DrawTexture(eye_16x16, softbody->average_position.x - 8, softbody->average_position.y - 8, WHITE);
-            DrawTexture(pupil_16x16, softbody->average_position.x - 8, softbody->average_position.y - 8, softbody->eye_colour);
+
+            DrawTriangleFan(render_points, softbody->points, visuals->body_colour);
+
+            for (int e = 0; e < visuals->eyes; e++) {
+                Texture2D* scelra = &scelra_textures[visuals->eye_types[e]];
+                Texture2D* iris = &iris_textures[visuals->eye_types[e]];
+                Vector2* pos = &visuals->eye_positions[e];
+
+                DrawTexture(
+                    *scelra,
+                    softbody->average_position.x + pos->x - (float)scelra->width/2,
+                    softbody->average_position.y + pos->y - (float)scelra->height/2,
+                    WHITE
+                );
+                DrawTexture(
+                    *iris,
+                    softbody->average_position.x + pos->x - (float)iris->width/2,
+                    softbody->average_position.y + pos->y - (float)iris->height/2,
+                    visuals->eye_colour
+                );
+            }
 
             if (holding == i || (holding < 0 && hovered == i)) {
                 for (int i = 0; i < softbody->points; i++)
@@ -169,7 +202,7 @@ int main(void) {
                 }
             }
         }
-        DrawCircleV(mouse_pos, 16, MAGENTA);
+        /*DrawCircleV(mouse_pos, 16, MAGENTA);*/
 
         EndTextureMode();
 

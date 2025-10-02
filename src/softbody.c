@@ -106,9 +106,7 @@ Softbody* softbody_init(
     Arena* arena,
     unsigned points,
     Vector2 position,
-    float radius,
-    Color eye_colour,
-    Color body_colour
+    float radius
 ) {
     Softbody* softbody = (Softbody*)arena_alloc(arena, sizeof(Softbody));
     if (!softbody) return NULL;
@@ -127,8 +125,6 @@ Softbody* softbody_init(
     softbody->shape_velocity = shape_velocity;
     softbody->average_position = position;
     softbody->old_average_position = position;
-    softbody->eye_colour = eye_colour;
-    softbody->body_colour = body_colour;
     softbody->points = points;
     softbody->radius = radius;
 
@@ -139,9 +135,49 @@ Softbody* softbody_init(
     return softbody;
 }
 
+SlimeVisual* softbody_visual_init(
+    Arena* arena,
+    Color eye_colour,
+    Color body_colour,
+    unsigned eyes,
+    float max_radius
+) {
+    SlimeVisual* slime_visual = (SlimeVisual*)arena_alloc(arena, sizeof(SlimeVisual));
+    if (!slime_visual) return NULL;
+
+    Vector2* eye_positions = (Vector2*)arena_alloc(arena, sizeof(Vector2) * eyes);
+    if (!eye_positions) return NULL;
+
+    EyeTypes* eye_types = (EyeTypes*)arena_alloc(arena, sizeof(EyeTypes) * eyes);
+    if (!eye_types) return NULL;
+
+
+    for (int i = 0; i < eyes; i++) {
+        float random = (double)rand() / RAND_MAX;
+
+        // Calculate random position inside of the max_radius
+        float theta = random * 2 * PI;
+        float r = max_radius * 0.75f * sqrt(random);
+        float x = r * cos(theta);
+        float y = r * sin(theta);
+
+        eye_positions[i] = (Vector2) {x, y};
+        eye_types[i] = GetRandomValue(0, EYETYPE_COUNT - 1);
+    }
+
+    slime_visual->eye_positions = eye_positions;
+    slime_visual->eye_types = eye_types;
+    slime_visual->eye_colour = eye_colour;
+    slime_visual->body_colour = body_colour;
+    slime_visual->eyes = eyes;
+
+    return slime_visual;
+}
+
 void softbody_create_random(
     Arena* arena,
     Softbody** softbodies,
+    SlimeVisual** slime_visuals,
     unsigned* active_softbodies
 ) {
     if (*active_softbodies == MAX_SOFTBODIES) {
@@ -149,20 +185,32 @@ void softbody_create_random(
         return;
     }
 
+    float radius = GetRandomValue(50, 100);
+
     Softbody* softbody = softbody_init(
         arena,
         GetRandomValue(10, MAX_POINTS),
         (Vector2) {GetRandomValue(0, WINDOW_WIDTH), GetRandomValue(0, WINDOW_HEIGHT)},
-        GetRandomValue(50, 100),
-        (Color) {GetRandomValue(0, 255), GetRandomValue(0, 255), GetRandomValue(0, 255), 255},
-        (Color) {GetRandomValue(0, 255), GetRandomValue(0, 255), GetRandomValue(0, 255), 200}
+        radius
     );
 
-    if (!softbody) {
+    SlimeVisual* slime_visual = softbody_visual_init(
+        arena,
+        (Color) {GetRandomValue(0, 255), GetRandomValue(0, 255), GetRandomValue(0, 255), 255},
+        (Color) {GetRandomValue(0, 255), GetRandomValue(0, 255), GetRandomValue(0, 255), 200},
+        GetRandomValue(1, 8),
+        radius
+    );
+
+    if (!softbody || !slime_visual) {
         printf("Failed to instantiate\n");
         return;
     }
 
-    softbodies[(*active_softbodies)++] = softbody;
+    softbodies[*active_softbodies] = softbody;
+    slime_visuals[*active_softbodies] = slime_visual;
+
+    (*active_softbodies)++;
+
     printf("Created!\n");
 }

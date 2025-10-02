@@ -14,11 +14,25 @@ typedef struct {
     Vector2* shape_velocity;
     Vector2 average_position;
     Vector2 old_average_position;
-    Color eye_colour;
-    Color body_colour;
     unsigned points;
     float radius;
 } Softbody;
+
+
+typedef enum {
+    SMALL,
+    MEDIUM,
+    EYETYPE_COUNT
+} EyeTypes;
+
+
+typedef struct {
+    Vector2* eye_positions;
+    EyeTypes* eye_types;
+    Color eye_colour;
+    Color body_colour;
+    unsigned eyes;
+} SlimeVisual;
 
 void softbody_align_target(
     Softbody* softbody,
@@ -41,14 +55,21 @@ Softbody* softbody_init(
     Arena* arena,
     unsigned points,
     Vector2 position,
-    float radius,
+    float radius
+);
+
+SlimeVisual* softbody_visual_init(
+    Arena* arena,
     Color eye_colour,
-    Color body_colour
+    Color body_colour,
+    unsigned eyes,
+    float max_radius
 );
 
 void softbody_create_random(
     Arena* arena,
     Softbody** softbodies,
+    SlimeVisual** slime_visuals,
     unsigned* active_softbodies
 );
 
