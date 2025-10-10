@@ -13,8 +13,8 @@
 typedef enum {
     SMALL,
     MEDIUM,
-    EYETYPE_COUNT,
-    NONE
+    EYETYPE_NONE,
+    EYETYPE_COUNT
 } EyeTypes;
 
 typedef enum {

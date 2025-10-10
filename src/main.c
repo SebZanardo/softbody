@@ -41,7 +41,7 @@ bool handheld;
 int main(void) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "softbody");
-    SetTargetFPS(60);
+    SetTargetFPS(FPS);
 
     /*HideCursor();*/
 
@@ -233,25 +233,42 @@ int main(void) {
 
             DrawTriangleFan(render_points, softbody->points, visuals->body_colour);
 
-            /*for (int e = 0; e < softbody->points + 1; e++) {*/
-            /*    Texture2D* scelra = &scelra_textures[visuals->eye_types[e]];*/
-            /*    Texture2D* iris = &iris_textures[visuals->eye_types[e]];*/
-            /*    Vector2* pos = &visuals->eye_positions[e];*/
-            /**/
-            /*    DrawTexture(*/
-            /*        *scelra,*/
-            /*        softbody->average_position.x + pos->x - (float)scelra->width/2,*/
-            /*        softbody->average_position.y + pos->y - (float)scelra->height/2,*/
-            /*        WHITE*/
-            /*    );*/
-            /*    DrawTexture(*/
-            /*        *iris,*/
-            /*        softbody->average_position.x + pos->x - (float)iris->width/2,*/
-            /*        softbody->average_position.y + pos->y - (float)iris->height/2,*/
-            /*        visuals->eye_colour*/
-            /*    );*/
-            /*}*/
-            /**/
+            for (int e = 0; e < softbody->points + 1; e++) {
+                if (visuals->eye_types[e] == EYETYPE_NONE) {
+                    continue;
+                }
+
+                Texture2D* scelra = &scelra_textures[visuals->eye_types[e]];
+                Texture2D* iris = &iris_textures[visuals->eye_types[e]];
+
+
+                Vector2 pos = softbody->average_position;
+                if (e < softbody-> points) {
+                    Vector2 current_pos = softbody->shape[e+offset];
+                    Vector2 diff = (Vector2) {
+                        current_pos.x - softbody->average_position.x,
+                        current_pos.y - softbody->average_position.y
+                    };
+                    pos = (Vector2) {
+                        current_pos.x - diff.x / 4.0f,
+                        current_pos.y - diff.y / 4.0f
+                    };
+                }
+
+                DrawTexture(
+                    *scelra,
+                    pos.x - (float)scelra->width/2,
+                    pos.y - (float)scelra->height/2,
+                    WHITE
+                );
+                DrawTexture(
+                    *iris,
+                    pos.x - (float)iris->width/2,
+                    pos.y - (float)iris->height/2,
+                    visuals->eye_colour
+                );
+            }
+
             if (holding == i || (holding < 0 && hovered == i)) {
                 for (int i = 0; i < softbody->points; i++)
                 {
@@ -283,6 +300,7 @@ int main(void) {
             0.0f,
             WHITE
         );
+        DrawFPS(0, 0);
         EndDrawing();
     }
 }

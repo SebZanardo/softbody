@@ -188,8 +188,8 @@ void softbody_move(
         Clamp(pv->x, -MAX_VEL, MAX_VEL);
         Clamp(pv->y, -MAX_VEL, MAX_VEL);
 
-        p->x = op->x + pv->x;
-        p->y = op->y + pv->y;
+        p->x = (op->x + pv->x);
+        p->y = (op->y + pv->y);
 
         // Clamp points to bounds
         if (p->x < border->x) {

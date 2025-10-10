@@ -4,6 +4,7 @@
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
+#define FPS 60
 
 #define ARENA_BYTES (1024 * 1024)
 
@@ -16,6 +17,7 @@
 #define GRAVITY_Y 0.6
 #define DAMPING 0.1
 #define FRICTION 0.96
+#define DT ((double) 1 / FPS)
 
 
 #endif  /* CONSTANTS_H */
