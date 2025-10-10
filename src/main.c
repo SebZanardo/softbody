@@ -77,7 +77,23 @@ int main(void) {
 
     unsigned active_softbodies = 0;
     Softbody* softbodies[MAX_SOFTBODIES];
-    SlimeVisual* slime_visual[MAX_SOFTBODIES];
+    SlimeVisual* slime_visuals[MAX_SOFTBODIES];
+
+    unsigned target_shape_points[SHAPES_COUNT];
+    target_shape_points[TRIANGLE] = 3;
+    target_shape_points[SQUARE] = 4;
+    target_shape_points[PENTAGON] = 5;
+    target_shape_points[OCTAGON] = 8;
+
+    Vector2* target_shape_positions[SHAPES_COUNT];
+    for (int i = 0; i < SHAPES_COUNT; i++) {
+        target_shape_positions[i] = (Vector2*) arena_alloc(
+            main_arena, sizeof(Vector2) * target_shape_points[i]
+        );
+        centred_polygon(
+            target_shape_positions[i], target_shape_points[i], 10.0f
+        );
+    }
 
     Rectangle border = {
         BORDER,
@@ -94,7 +110,14 @@ int main(void) {
     int hovered = -1;
     int holding = -1;
 
-    softbody_create_random(main_arena, softbodies, slime_visual, &active_softbodies);
+    softbody_create_random(
+        main_arena,
+        softbodies,
+        slime_visuals,
+        target_shape_positions,
+        target_shape_points,
+        &active_softbodies
+    );
 
     while (!WindowShouldClose()) {
         if (IsWindowResized()) handle_resize();
@@ -115,7 +138,14 @@ int main(void) {
         second_buffer = second_buffer == 1 ? 0 : 1;
 
         if (IsKeyPressed(KEY_SPACE)) {
-            softbody_create_random(main_arena, softbodies, slime_visual, &active_softbodies);
+            softbody_create_random(
+                main_arena,
+                softbodies,
+                slime_visuals,
+                target_shape_positions,
+                target_shape_points,
+                &active_softbodies
+            );
         }
 
         hovered = -1;
@@ -139,8 +169,18 @@ int main(void) {
 
             if (holding >= 0) {
                 Softbody* softbody = softbodies[holding]; 
-                softbody_set_points(softbody, mouse_pos);
-                softbody_set_velocity(softbody, velocity);
+                softbody_set_points(
+                    target_shape_positions[softbody->target_shape],
+                    softbody->shape,
+                    &softbody->average_position,
+                    &softbody->old_average_position,
+                    mouse_pos,
+                    softbody->points,
+                    softbody->size
+                );
+                softbody_set_velocity(
+                    softbody->shape_velocity, velocity, softbody->points
+                );
             }
         } else {
             holding = -1;
@@ -148,8 +188,25 @@ int main(void) {
 
         for (int i = 0; i < active_softbodies; i++) {
             Softbody* softbody = softbodies[i]; 
-            softbody_move(softbody, border, second_buffer);
-            softbody_align_target(softbody, second_buffer);
+            softbody_move(
+                softbody->shape,
+                softbody->shape_velocity,
+                &border,
+                &softbody->old_average_position,
+                &softbody->average_position,
+                softbody->points,
+                second_buffer
+            );
+            softbody_align_target(
+                target_shape_positions[softbody->target_shape],
+                softbody->shape,
+                softbody->shape_velocity,
+                &softbody->average_position,
+                softbody->points,
+                softbody->size,
+                softbody->elasticity,
+                second_buffer
+            );
         }
 
         // RENDER
@@ -165,7 +222,7 @@ int main(void) {
         // Draw in reverse order because pickup priority is oldest to newest
         for (int i = active_softbodies - 1; i >= 0; i--) {
             Softbody* softbody = softbodies[i]; 
-            SlimeVisual* visuals = slime_visual[i]; 
+            SlimeVisual* visuals = slime_visuals[i]; 
 
             unsigned offset = second_buffer*softbody->points;
             for (int p = 0; p < softbody->points; p++) {
@@ -176,25 +233,25 @@ int main(void) {
 
             DrawTriangleFan(render_points, softbody->points, visuals->body_colour);
 
-            for (int e = 0; e < visuals->eyes; e++) {
-                Texture2D* scelra = &scelra_textures[visuals->eye_types[e]];
-                Texture2D* iris = &iris_textures[visuals->eye_types[e]];
-                Vector2* pos = &visuals->eye_positions[e];
-
-                DrawTexture(
-                    *scelra,
-                    softbody->average_position.x + pos->x - (float)scelra->width/2,
-                    softbody->average_position.y + pos->y - (float)scelra->height/2,
-                    WHITE
-                );
-                DrawTexture(
-                    *iris,
-                    softbody->average_position.x + pos->x - (float)iris->width/2,
-                    softbody->average_position.y + pos->y - (float)iris->height/2,
-                    visuals->eye_colour
-                );
-            }
-
+            /*for (int e = 0; e < softbody->points + 1; e++) {*/
+            /*    Texture2D* scelra = &scelra_textures[visuals->eye_types[e]];*/
+            /*    Texture2D* iris = &iris_textures[visuals->eye_types[e]];*/
+            /*    Vector2* pos = &visuals->eye_positions[e];*/
+            /**/
+            /*    DrawTexture(*/
+            /*        *scelra,*/
+            /*        softbody->average_position.x + pos->x - (float)scelra->width/2,*/
+            /*        softbody->average_position.y + pos->y - (float)scelra->height/2,*/
+            /*        WHITE*/
+            /*    );*/
+            /*    DrawTexture(*/
+            /*        *iris,*/
+            /*        softbody->average_position.x + pos->x - (float)iris->width/2,*/
+            /*        softbody->average_position.y + pos->y - (float)iris->height/2,*/
+            /*        visuals->eye_colour*/
+            /*    );*/
+            /*}*/
+            /**/
             if (holding == i || (holding < 0 && hovered == i)) {
                 for (int i = 0; i < softbody->points; i++)
                 {

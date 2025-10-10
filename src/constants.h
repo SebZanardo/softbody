@@ -1,6 +1,7 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
 
@@ -15,4 +16,6 @@
 #define GRAVITY_Y 0.6
 #define DAMPING 0.1
 #define FRICTION 0.96
+
+
 #endif  /* CONSTANTS_H */
