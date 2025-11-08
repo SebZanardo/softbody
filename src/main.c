@@ -3,6 +3,7 @@
 #include "constants.h"
 #include "raylib.h"
 #include "softbody.h"
+#include "slime.h"
 
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -45,8 +46,8 @@ int main(void) {
 
     /*HideCursor();*/
 
-    SetRandomSeed(1);
-    srand(1);
+    SetRandomSeed(0);
+    srand(0);
 
     #ifdef WEB
         handheld = IsMobile();
@@ -110,7 +111,7 @@ int main(void) {
     int hovered = -1;
     int holding = -1;
 
-    softbody_create_random(
+    slime_create_random(
         main_arena,
         softbodies,
         slime_visuals,
@@ -138,7 +139,7 @@ int main(void) {
         second_buffer = second_buffer == 1 ? 0 : 1;
 
         if (IsKeyPressed(KEY_SPACE)) {
-            softbody_create_random(
+            slime_create_random(
                 main_arena,
                 softbodies,
                 slime_visuals,
@@ -150,7 +151,7 @@ int main(void) {
 
         hovered = -1;
         for (int i = 0; i < active_softbodies; i++) {
-            Softbody* softbody = softbodies[i]; 
+            Softbody* softbody = softbodies[i];
             if (CheckCollisionPointPoly(mouse_pos, softbody->shape, softbody->points)) {
                 hovered = i;
                 break;
@@ -168,43 +169,24 @@ int main(void) {
             }
 
             if (holding >= 0) {
-                Softbody* softbody = softbodies[holding]; 
+                Softbody* softbody = softbodies[holding];
                 softbody_set_points(
+                    softbody,
                     target_shape_positions[softbody->target_shape],
-                    softbody->shape,
-                    &softbody->average_position,
-                    &softbody->old_average_position,
-                    mouse_pos,
-                    softbody->points,
-                    softbody->size
+                    mouse_pos
                 );
-                softbody_set_velocity(
-                    softbody->shape_velocity, velocity, softbody->points
-                );
+                softbody_set_velocity(softbody, velocity);
             }
         } else {
             holding = -1;
         }
 
         for (int i = 0; i < active_softbodies; i++) {
-            Softbody* softbody = softbodies[i]; 
-            softbody_move(
-                softbody->shape,
-                softbody->shape_velocity,
-                &border,
-                &softbody->old_average_position,
-                &softbody->average_position,
-                softbody->points,
-                second_buffer
-            );
+            Softbody* softbody = softbodies[i];
+            softbody_move(softbody, &border, second_buffer);
             softbody_align_target(
+                softbody,
                 target_shape_positions[softbody->target_shape],
-                softbody->shape,
-                softbody->shape_velocity,
-                &softbody->average_position,
-                softbody->points,
-                softbody->size,
-                softbody->elasticity,
                 second_buffer
             );
         }
@@ -221,8 +203,8 @@ int main(void) {
 
         // Draw in reverse order because pickup priority is oldest to newest
         for (int i = active_softbodies - 1; i >= 0; i--) {
-            Softbody* softbody = softbodies[i]; 
-            SlimeVisual* visuals = slime_visuals[i]; 
+            Softbody* softbody = softbodies[i];
+            SlimeVisual* visuals = slime_visuals[i];
 
             unsigned offset = second_buffer*softbody->points;
             for (int p = 0; p < softbody->points; p++) {
@@ -272,7 +254,12 @@ int main(void) {
             if (holding == i || (holding < 0 && hovered == i)) {
                 for (int i = 0; i < softbody->points; i++)
                 {
-                    DrawLineEx(softbody->shape[i+offset], softbody->shape[modulo(i + 1, softbody->points)+offset], 2.0f, WHITE);
+                    DrawLineEx(
+                        softbody->shape[i+offset],
+                        softbody->shape[modulo(i + 1, softbody->points)+offset],
+                        2.0f,
+                        WHITE
+                    );
                 }
             }
         }

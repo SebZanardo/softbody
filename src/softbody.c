@@ -33,154 +33,62 @@ Softbody* softbody_init(
     softbody->points = points;
     softbody->target_shape = target_shape;
 
-    softbody_set_points(
-        target_shape_position,
-        softbody->shape,
-        &softbody->average_position,
-        &softbody->old_average_position,
-        position,
-        softbody->points,
-        softbody->size
-    );
-    softbody_set_velocity(
-        softbody->shape_velocity, (Vector2) {0.0f, 0.0f}, softbody->points
-    );
+    softbody_set_points(softbody, target_shape_position, position);
+    softbody_set_velocity(softbody, (Vector2) {0.0f, 0.0f});
 
     return softbody;
 }
 
-SlimeVisual* slime_visual_init(
-    Arena* arena,
-    Color eye_colour,
-    Color body_colour,
-    unsigned eyes
-) {
-    SlimeVisual* slime_visual = (SlimeVisual*)arena_alloc(arena, sizeof(SlimeVisual));
-    if (!slime_visual) return NULL;
-
-    EyeTypes* eye_types = (EyeTypes*)arena_alloc(arena, sizeof(EyeTypes) * eyes);
-    if (!eye_types) return NULL;
-
-    for (int i = 0; i < eyes; i++) {
-        eye_types[i] = GetRandomValue(0, EYETYPE_COUNT - 1);
-    }
-
-    slime_visual->eye_types = eye_types;
-    slime_visual->eye_colour = eye_colour;
-    slime_visual->body_colour = body_colour;
-
-    return slime_visual;
-}
-
-void softbody_create_random(
-    Arena* arena,
-    Softbody** softbodies,
-    SlimeVisual** slime_visuals,
-    Vector2** target_shape_positions,
-    unsigned* target_shape_points,
-    unsigned* active_softbodies
-) {
-    if (*active_softbodies == MAX_SOFTBODIES) {
-        printf("At softbody capacity\n");
-        return;
-    }
-
-    Shapes target_shape = GetRandomValue(0, SHAPES_COUNT - 1);
-    float size = GetRandomValue(3, 10);
-    Vector2 position = (Vector2) {
-        GetRandomValue(0, WINDOW_WIDTH),
-        GetRandomValue(0, WINDOW_HEIGHT)
-    };
-    unsigned points = target_shape_points[target_shape];
-
-    Softbody* softbody = softbody_init(
-        arena,
-        target_shape_positions[target_shape],
-        position,
-        points,
-        size,
-        1.0f,
-        0.1f,
-        target_shape
-    );
-
-    SlimeVisual* slime_visual = slime_visual_init(
-        arena,
-        (Color) {
-            GetRandomValue(0, 255),
-            GetRandomValue(0, 255),
-            GetRandomValue(0, 255),
-            255
-        },
-        (Color) {
-            GetRandomValue(0, 255),
-            GetRandomValue(0, 255),
-            GetRandomValue(0, 255),
-            200
-        },
-        points + 1
-    );
-
-    if (!softbody || !slime_visual) {
-        printf("Failed to instantiate\n");
-        return;
-    }
-
-    softbodies[*active_softbodies] = softbody;
-    slime_visuals[*active_softbodies] = slime_visual;
-
-    (*active_softbodies)++;
-
-    printf("Created!\n");
-}
-
 void softbody_align_target(
+    Softbody* softbody,
     Vector2* target_shape,
-    Vector2* shape,
-    Vector2* shape_velocity,
-    Vector2* average_position,
-    unsigned points,
-    float size,
-    float elasticity,
     int second_buffer
 ) {
-    unsigned offset = second_buffer * points;
+    unsigned offset = second_buffer * softbody->points;
 
-    for (int i = 0; i < points; i++) {
-        Vector2* p = &shape[i+offset];
-        Vector2* pv = &shape_velocity[i+offset];
-        float tx = average_position->x + target_shape[i].x * size;
-        float ty = average_position->y + target_shape[i].y * size;
+    // TODO: Calculate rotation
+    static float angle;
+    angle += 0.01;
 
-        pv->x += (tx - p->x) * elasticity;
-        pv->y += (ty - p->y) * elasticity;
+    float sin_a = sin(angle);
+    float cos_a = cos(angle);
+    Vector2 tp = Vector2Zero();
+
+    for (int i = 0; i < softbody->points; i++) {
+        Vector2* p = &softbody->shape[i+offset];
+        Vector2* pv = &softbody->shape_velocity[i+offset];
+
+        tp.x = target_shape[i].x * cos_a - target_shape[i].y * sin_a;
+        tp.y = target_shape[i].x * sin_a + target_shape[i].y * cos_a;
+
+        float tx = softbody->average_position.x + tp.x * softbody->size;
+        float ty = softbody->average_position.y + tp.y * softbody->size;
+
+        pv->x += (tx - p->x) * softbody->elasticity;
+        pv->y += (ty - p->y) * softbody->elasticity;
     }
 }
 
 void softbody_move(
-    Vector2* shape,
-    Vector2* shape_velocity,
+    Softbody* softbody,
     Rectangle* border,
-    Vector2* old_average_position,
-    Vector2* average_position,
-    unsigned points,
     int second_buffer
 ) {
-    unsigned offset = second_buffer * points;
-    unsigned old_offset = points - offset;
+    unsigned offset = second_buffer * softbody->points;
+    unsigned old_offset = softbody->points - offset;
 
-    old_average_position->x = average_position->x;
-    old_average_position->y = average_position->y;
-    average_position->x = 0;
-    average_position->y = 0;
+    softbody->old_average_position.x = softbody->average_position.x;
+    softbody->old_average_position.y = softbody->average_position.y;
+    softbody->average_position.x = 0;
+    softbody->average_position.y = 0;
 
     // Update points in current buffer
-    for (int i = 0; i < points; i++) {
-        Vector2* p = &shape[i+offset];
-        Vector2* pv = &shape_velocity[i+offset];
+    for (int i = 0; i < softbody->points; i++) {
+        Vector2* p = &softbody->shape[i+offset];
+        Vector2* pv = &softbody->shape_velocity[i+offset];
 
-        Vector2* op = &shape[i+old_offset];
-        Vector2* opv = &shape_velocity[i+old_offset];
+        Vector2* op = &softbody->shape[i+old_offset];
+        Vector2* opv = &softbody->shape_velocity[i+old_offset];
 
         pv->x = (opv->x + GRAVITY_X) * FRICTION;
         pv->y = (opv->y + GRAVITY_Y) * FRICTION;
@@ -206,45 +114,43 @@ void softbody_move(
             p->y = border->y + border->height;
             pv->y = 0.0;
         }
-        average_position->x += p->x;
-        average_position->y += p->y;
+        softbody->average_position.x += p->x;
+        softbody->average_position.y += p->y;
     }
 
-    average_position->x /= points;
-    average_position->y /= points;
+    softbody->average_position.x /= softbody->points;
+    softbody->average_position.y /= softbody->points;
 }
 
 void softbody_set_velocity(
-    Vector2* shape_velocity,
-    Vector2 velocity,
-    unsigned points
+    Softbody* softbody,
+    Vector2 velocity
 ) {
-    for (int i = 0; i < points; i++) {
-        shape_velocity[i].x = velocity.x;
-        shape_velocity[i].y = velocity.y;
-        shape_velocity[i+points].x = velocity.x;
-        shape_velocity[i+points].y = velocity.y;
+    for (int i = 0; i < softbody->points; i++) {
+        softbody->shape_velocity[i].x = velocity.x;
+        softbody->shape_velocity[i].y = velocity.y;
+        softbody->shape_velocity[i+softbody->points].x = velocity.x;
+        softbody->shape_velocity[i+softbody->points].y = velocity.y;
     }
 }
 
 void softbody_set_points(
+    Softbody* softbody,
     Vector2* target_shape,
-    Vector2* shape,
-    Vector2* average_position,
-    Vector2* old_average_position,
-    Vector2 position,
-    unsigned points,
-    float size
+    Vector2 pos
 ) {
-    average_position->x = position.x;
-    average_position->y = position.y;
-    old_average_position->x = position.x;
-    old_average_position->y = position.y;
-    for (int i = 0; i < points; i++) {
-        shape[i].x = position.x + target_shape[i].x * size;
-        shape[i].y = position.y + target_shape[i].y * size;
-        shape[i+points].x = position.x + target_shape[i].x * size;
-        shape[i+points].y = position.y + target_shape[i].y * size;
+    softbody->average_position.x = pos.x;
+    softbody->average_position.y = pos.y;
+    softbody->old_average_position.x = pos.x;
+    softbody->old_average_position.y = pos.y;
+
+    // TODO: Account for softbody angle (use function)
+    for (int i = 0; i < softbody->points; i++) {
+        Vector2 ts = target_shape[i];
+        softbody->shape[i].x = pos.x + ts.x * softbody->size;
+        softbody->shape[i].y = pos.y + ts.y * softbody->size;
+        softbody->shape[i+softbody->points].x = pos.x + ts.x * softbody->size;
+        softbody->shape[i+softbody->points].y = pos.y + ts.y * softbody->size;
     }
 }
 
