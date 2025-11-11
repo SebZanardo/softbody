@@ -18,6 +18,7 @@ typedef struct {
     float offset_y;
 } WindowParameters;
 
+
 #ifdef WEB
 #include <emscripten/emscripten.h>
 
@@ -46,7 +47,7 @@ int main(void) {
 
     /*HideCursor();*/
 
-    SetRandomSeed(0);
+    SetRandomSeed(8);
     srand(0);
 
     #ifdef WEB

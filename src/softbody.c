@@ -46,12 +46,8 @@ void softbody_align_target(
 ) {
     unsigned offset = second_buffer * softbody->points;
 
-    // TODO: Calculate rotation
-    static float angle;
-    angle += 0.01;
-
-    float sin_a = sin(angle);
-    float cos_a = cos(angle);
+    float sin_a = sin(softbody->rotation);
+    float cos_a = cos(softbody->rotation);
     Vector2 tp = Vector2Zero();
 
     for (int i = 0; i < softbody->points; i++) {
@@ -81,6 +77,9 @@ void softbody_move(
     softbody->old_average_position.y = softbody->average_position.y;
     softbody->average_position.x = 0;
     softbody->average_position.y = 0;
+
+    // TODO: Remove this just for testing
+    softbody->rotation += 0.1;
 
     // Update points in current buffer
     for (int i = 0; i < softbody->points; i++) {
@@ -144,13 +143,20 @@ void softbody_set_points(
     softbody->old_average_position.x = pos.x;
     softbody->old_average_position.y = pos.y;
 
-    // TODO: Account for softbody angle (use function)
+    float sin_a = sin(softbody->rotation);
+    float cos_a = cos(softbody->rotation);
+    Vector2 tp = Vector2Zero();
+
     for (int i = 0; i < softbody->points; i++) {
-        Vector2 ts = target_shape[i];
-        softbody->shape[i].x = pos.x + ts.x * softbody->size;
-        softbody->shape[i].y = pos.y + ts.y * softbody->size;
-        softbody->shape[i+softbody->points].x = pos.x + ts.x * softbody->size;
-        softbody->shape[i+softbody->points].y = pos.y + ts.y * softbody->size;
+        tp.x = target_shape[i].x * cos_a - target_shape[i].y * sin_a;
+        tp.y = target_shape[i].x * sin_a + target_shape[i].y * cos_a;
+
+        float tx = softbody->average_position.x + tp.x * softbody->size;
+        float ty = softbody->average_position.y + tp.y * softbody->size;
+        softbody->shape[i].x = tx;
+        softbody->shape[i].y = ty;
+        softbody->shape[i+softbody->points].x = tx;
+        softbody->shape[i+softbody->points].y = ty;
     }
 }
 
