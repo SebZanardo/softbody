@@ -47,7 +47,7 @@ int main(void) {
 
     /*HideCursor();*/
 
-    SetRandomSeed(8);
+    SetRandomSeed(0);
     srand(0);
 
     #ifdef WEB
@@ -196,7 +196,7 @@ int main(void) {
         BeginTextureMode(target);
         ClearBackground(BLACK);
 
-        DrawTexture(dungeon, 0, 0, WHITE);
+        /*DrawTexture(dungeon, 0, 0, WHITE);*/
 
         DrawRectangleLinesEx(border, 2, WHITE);
 
@@ -269,7 +269,7 @@ int main(void) {
         EndTextureMode();
 
         BeginDrawing();
-        ClearBackground(BLACK);
+        ClearBackground(WHITE);
         DrawTexturePro(
             target.texture,
             (Rectangle){
@@ -288,7 +288,7 @@ int main(void) {
             0.0f,
             WHITE
         );
-        DrawFPS(0, 0);
+        /*DrawFPS(0, 0);*/
         EndDrawing();
     }
 }
